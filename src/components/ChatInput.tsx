@@ -37,6 +37,80 @@ export default function ChatInput({
     });
   };
 
+  const handleSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!prompt.trim() || !currentChatId || loading) return;
+
+    const userPrompt = prompt.trim();
+    setPrompt("");
+    setLoading(true);
+    setErrorMessage("");
+
+    const nextMessages: Message[] = [
+      ...messages,
+      { role: "user", content: userPrompt },
+    ];
+
+    setMessages(nextMessages);
+
+    try {
+      await saveMessage(currentChatId, "user", userPrompt);
+
+      const assistantIndex = nextMessages.length;
+
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: "" },
+      ]);
+
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: nextMessages.map((m) => ({
+            role: m.role,
+            content: m.content,
+          })),
+        }),
+      });
+
+      if (!res.ok || !res.body) {
+        throw new Error("Erreur de génération");
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let fullText = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        fullText += chunk;
+
+        setMessages((prev) => {
+          const updated = [...prev];
+          updated[assistantIndex] = {
+            role: "assistant",
+            content: fullText,
+          };
+          return updated;
+        });
+      }
+
+      await saveMessage(currentChatId, "assistant", fullText);
+    } catch (error) {
+      console.error(error);
+      setErrorMessage("Erreur réseau ou provider IA");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleImprove = async () => {
     if (!prompt.trim()) return;
 
@@ -64,78 +138,30 @@ export default function ChatInput({
   };
 
   const handleVoice = () => {
-    const SpeechRecognition =
+    const SpeechRecognitionClass =
       (window as any).SpeechRecognition ||
       (window as any).webkitSpeechRecognition;
-
-    if (!SpeechRecognition) {
-      setErrorMessage("La reconnaissance vocale n'est pas supportée sur ce navigateur.");
+  
+    if (!SpeechRecognitionClass) {
+      setErrorMessage(
+        "La reconnaissance vocale n'est pas supportée sur ce navigateur."
+      );
       return;
     }
-
-    const recognition = new SpeechRecognition();
+  
+    const recognition = new SpeechRecognitionClass();
+  
     recognition.lang = "fr-FR";
     recognition.start();
-
+  
     recognition.onresult = (event: any) => {
       const transcript = event.results[0][0].transcript;
       setPrompt((prev) => (prev ? prev + " " + transcript : transcript));
     };
-
+  
     recognition.onerror = () => {
       setErrorMessage("Erreur pendant la reconnaissance vocale.");
     };
-  };
-
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!prompt.trim() || !currentChatId || loading) return;
-
-    const userPrompt = prompt.trim();
-    setPrompt("");
-    setLoading(true);
-    setErrorMessage("");
-
-    const nextMessages: Message[] = [
-      ...messages,
-      { role: "user", content: userPrompt },
-    ];
-
-    setMessages(nextMessages);
-
-    try {
-      await saveMessage(currentChatId, "user", userPrompt);
-
-      const res = await fetch("/api/generate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ messages: nextMessages }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setErrorMessage(data.error || "Erreur lors de la génération");
-        return;
-      }
-
-      const aiMessage = data.result || "Aucune réponse générée";
-
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: aiMessage },
-      ]);
-
-      await saveMessage(currentChatId, "assistant", aiMessage);
-    } catch (error) {
-      console.error(error);
-      setErrorMessage("Erreur réseau ou provider IA");
-    } finally {
-      setLoading(false);
-    }
   };
 
   return (
@@ -154,7 +180,7 @@ export default function ChatInput({
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
-              handleSend(e as unknown as React.FormEvent);
+              void handleSend(e);
             }
           }}
           placeholder="Pose ta question..."

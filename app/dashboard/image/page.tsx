@@ -6,6 +6,7 @@ export default function ImagePage() {
   const [prompt, setPrompt] = useState("");
   const [image, setImage] = useState("");
   const [generatedPrompt, setGeneratedPrompt] = useState("");
+  const [provider, setProvider] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -15,6 +16,7 @@ export default function ImagePage() {
     setLoading(true);
     setImage("");
     setGeneratedPrompt("");
+    setProvider("");
     setError("");
 
     try {
@@ -28,25 +30,21 @@ export default function ImagePage() {
 
       const data = await res.json();
 
-      // 🔴 إذا API key غلط
       if (!res.ok) {
         setError(data.error || "Erreur génération image");
-
-        // fallback → عرض prompt فقط
-        setGeneratedPrompt(prompt);
         return;
       }
 
-      // ✅ صورة حقيقية
-      if (data.image) {
+      setProvider(data.provider || "");
+
+      if (data.mode === "image" && data.image) {
         setImage(data.image);
       }
 
-      // 🧠 fallback prompt generator
-      if (data.prompt) {
+      if (data.mode === "prompt" && data.prompt) {
         setGeneratedPrompt(data.prompt);
       }
-    } catch (err) {
+    } catch {
       setError("Erreur de connexion");
     } finally {
       setLoading(false);
@@ -55,73 +53,74 @@ export default function ImagePage() {
 
   return (
     <div className="p-6 text-white">
-      {/* HEADER */}
-      <h1 className="text-3xl font-bold mb-2">🎨 Image AI</h1>
-      <p className="text-white/60 mb-6">
-        Génère une image à partir d’un prompt ou crée un prompt professionnel.
-      </p>
+      <h1 className="mb-2 text-3xl font-bold">🎨 Smart Image Prompt AI</h1>
+      <p className="mb-6 text-white/60">
+  Génère un prompt image professionnel avec IA (Gemini / OpenRouter).
+</p>
 
-      {/* BOX */}
-      <div className="bg-white/5 border border-white/10 rounded-2xl p-6">
+      <div className="rounded-2xl border border-white/10 bg-white/5 p-6">
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          placeholder="Ex: une maison futuriste au coucher du soleil"
-          className="w-full min-h-[160px] bg-black rounded-xl p-4 outline-none text-white"
+          placeholder="Ex: une villa futuriste au coucher du soleil, style réaliste"
+          className="min-h-[160px] w-full rounded-xl bg-black p-4 text-white outline-none"
         />
 
         <button
           onClick={handleGenerate}
           disabled={loading}
-          className="mt-4 bg-white text-black px-6 py-3 rounded-xl font-semibold hover:bg-gray-200 disabled:opacity-50"
+          className="mt-4 rounded-xl bg-white px-6 py-3 font-semibold text-black hover:bg-gray-200 disabled:opacity-50"
         >
-          {loading ? "Génération..." : "Générer l’image"}
+          {loading ? "Génération..." : "Générer"}
         </button>
 
-        {/* ERROR */}
+        {provider && (
+          <p className="mt-4 text-sm text-white/50">
+            Provider utilisé : <span className="font-semibold">{provider}</span>
+          </p>
+        )}
+
         {error && (
-          <p className="text-red-400 mt-4 text-sm">
+          <p className="mt-4 text-sm text-red-400">
             ⚠️ {error}
           </p>
         )}
 
-        {/* IMAGE RESULT */}
         {image && (
           <div className="mt-6">
-            <h2 className="text-lg font-semibold mb-2">Résultat</h2>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Image générée</h2>
+              <a
+                href={image}
+                download="generated-image.png"
+                className="rounded-lg border border-white/10 px-3 py-1 text-sm hover:bg-white/10"
+              >
+                Télécharger
+              </a>
+            </div>
 
             <img
               src={image}
               alt="Generated"
               className="rounded-xl border border-white/10"
             />
-
-            <button
-              onClick={() => window.open(image, "_blank")}
-              className="mt-3 px-4 py-2 border border-white/10 rounded-lg hover:bg-white/10"
-            >
-              Télécharger
-            </button>
           </div>
         )}
 
-        {/* PROMPT RESULT */}
         {!image && generatedPrompt && (
-          <div className="mt-6 bg-black border border-white/10 rounded-xl p-4">
-            <div className="flex justify-between items-center mb-2">
+          <div className="mt-6 rounded-xl border border-white/10 bg-black p-4">
+            <div className="mb-2 flex items-center justify-between">
               <h2 className="font-semibold">Prompt généré</h2>
 
               <button
-                onClick={() =>
-                  navigator.clipboard.writeText(generatedPrompt)
-                }
-                className="text-sm border px-3 py-1 rounded-lg hover:bg-white/10"
+                onClick={() => navigator.clipboard.writeText(generatedPrompt)}
+                className="rounded-lg border border-white/10 px-3 py-1 text-sm hover:bg-white/10"
               >
                 Copier
               </button>
             </div>
 
-            <pre className="text-white/70 whitespace-pre-wrap">
+            <pre className="whitespace-pre-wrap text-white/70">
               {generatedPrompt}
             </pre>
           </div>
